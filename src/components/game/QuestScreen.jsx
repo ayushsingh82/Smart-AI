@@ -12,7 +12,7 @@ const QuestScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-900 to-blue-900">
+    <div className="bg-gradient-to-b from-purple-900 to-blue-900 min-h-[calc(100vh-4rem)]">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <motion.div 

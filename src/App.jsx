@@ -4,10 +4,12 @@ import { Outlet } from 'react-router-dom';
 
 function App() {
   return (
-    <>
+    <div className="min-h-screen">
       <Navigation />
-      <Outlet />
-    </>
+      <main className="pt-16">
+        <Outlet />
+      </main>
+    </div>
   );
 }
 
