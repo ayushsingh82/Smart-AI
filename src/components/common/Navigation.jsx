@@ -120,11 +120,11 @@ const Navigation = () => {
             to="/" 
             className="flex items-center space-x-3 group"
           >
-            <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center transform transition-transform group-hover:scale-110">
-              <span className="text-xl">🎮</span>
+            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center transform transition-transform group-hover:scale-110">
+              <span className="text-xl">🤖</span>
             </div>
             <span className="text-white font-bold text-xl tracking-tight">
-              Code<span className="text-purple-400">Quest</span>
+              Smart<span className="text-blue-400">AI</span>
             </span>
           </Link>
           
@@ -134,9 +134,9 @@ const Navigation = () => {
               <span className="material-icons text-sm mr-1">home</span>
               Home
             </NavLink>
-            <NavLink to="/quest" current={location.pathname === "/quest"}>
-              <span className="material-icons text-sm mr-1">code</span>
-              Quests
+            <NavLink to="/ai" current={location.pathname === "/ai"}>
+              <span className="material-icons text-sm mr-1">smart_toy</span>
+              AI Generator
             </NavLink>
           </div>
 

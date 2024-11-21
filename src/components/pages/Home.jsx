@@ -9,16 +9,16 @@ const FeatureCard = ({ icon, title, description }) => (
     viewport={{ once: true }}
     className="bg-white/10 backdrop-blur-sm p-6 rounded-xl"
   >
-    <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center mb-4">
+    <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mb-4">
       <span className="material-icons text-2xl text-white">{icon}</span>
     </div>
     <h3 className="text-xl font-bold mb-2">{title}</h3>
-    <p className="text-purple-200">{description}</p>
+    <p className="text-blue-200">{description}</p>
   </motion.div>
 );
 
 const Home = () => (
-  <div className="bg-gradient-to-b from-purple-900 to-blue-900 text-white min-h-[calc(100vh-4rem)]">
+  <div className="bg-gradient-to-b from-blue-900 to-purple-900 text-white min-h-[calc(100vh-4rem)]">
     {/* Hero Section */}
     <section className="py-20 px-8">
       <div className="max-w-6xl mx-auto text-center">
@@ -27,15 +27,15 @@ const Home = () => (
           animate={{ opacity: 1, y: 0 }}
           className="text-6xl font-bold mb-6"
         >
-          Code Quest Adventure
+          AI-Powered Smart Contract Generator
         </motion.h1>
         <motion.p 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="text-2xl text-purple-200 mb-12 max-w-3xl mx-auto"
+          className="text-2xl text-blue-200 mb-12 max-w-3xl mx-auto"
         >
-          Embark on an epic journey through interactive coding challenges and level up your programming skills!
+          Transform natural language into secure, production-ready smart contracts with the power of AI
         </motion.p>
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
@@ -44,10 +44,10 @@ const Home = () => (
           className="space-x-4"
         >
           <Link 
-            to="/quest" 
-            className="inline-block bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-lg transition-colors duration-200"
+            to="/ai" 
+            className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg transition-colors duration-200"
           >
-            Start Adventure
+            Start Generating
           </Link>
           <a 
             href="#features" 
@@ -60,7 +60,7 @@ const Home = () => (
     </section>
 
     {/* Features Section */}
-    <section id="features" className="py-20 px-8 bg-purple-900/30">
+    <section id="features" className="py-20 px-8 bg-blue-900/30">
       <div className="max-w-6xl mx-auto">
         <motion.h2 
           initial={{ opacity: 0 }}
@@ -68,38 +68,38 @@ const Home = () => (
           viewport={{ once: true }}
           className="text-4xl font-bold text-center mb-16"
         >
-          Why Choose Code Quest?
+          Why Use Smart Contract AI?
         </motion.h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <FeatureCard 
             icon="code"
-            title="Interactive Challenges"
-            description="Learn programming concepts through hands-on coding challenges and real-world problems."
+            title="Natural Language Input"
+            description="Describe your contract requirements in plain English and let AI handle the code generation."
           />
           <FeatureCard 
-            icon="military_tech"
-            title="Earn Rewards"
-            description="Collect badges, achievements, and CodeCoins as you progress through your coding journey."
+            icon="security"
+            title="Security First"
+            description="Generated contracts follow best practices and include essential security features."
           />
           <FeatureCard 
-            icon="school"
-            title="Learn by Doing"
-            description="Practice with our built-in code editor and get instant feedback on your solutions."
+            icon="bolt"
+            title="Instant Generation"
+            description="Get production-ready smart contracts in seconds, not hours or days."
           />
           <FeatureCard 
-            icon="trending_up"
-            title="Track Progress"
-            description="Monitor your learning journey with detailed progress tracking and statistics."
+            icon="auto_fix"
+            title="Customizable Output"
+            description="Fine-tune the generated contracts to match your specific requirements."
           />
           <FeatureCard 
-            icon="groups"
-            title="Community Learning"
-            description="Join a community of learners and share your knowledge with others."
+            icon="rocket_launch"
+            title="One-Click Deploy"
+            description="Deploy your contracts directly to the blockchain with integrated wallet support."
           />
           <FeatureCard 
-            icon="auto_awesome"
-            title="Multiple Languages"
-            description="Master various programming languages through specialized quest paths."
+            icon="update"
+            title="Always Updated"
+            description="Stay current with the latest Solidity features and security practices."
           />
         </div>
       </div>
@@ -114,15 +114,15 @@ const Home = () => (
           viewport={{ once: true }}
           className="text-4xl font-bold mb-6"
         >
-          Ready to Begin Your Coding Adventure?
+          Ready to Generate Your Smart Contract?
         </motion.h2>
         <motion.p 
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="text-xl text-purple-200 mb-8"
+          className="text-xl text-blue-200 mb-8"
         >
-          Join thousands of learners who have transformed their coding skills through interactive challenges.
+          Join developers who are already using AI to streamline their smart contract development.
         </motion.p>
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -131,18 +131,12 @@ const Home = () => (
           className="flex justify-center space-x-4"
         >
           <Link 
-            to="/quest" 
-            className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+            to="/ai" 
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg transition-colors duration-200 flex items-center space-x-2"
           >
-            <span className="material-icons">play_arrow</span>
-            <span>Start Now</span>
+            <span className="material-icons">smart_toy</span>
+            <span>Try It Now</span>
           </Link>
-          <button 
-            className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-lg transition-colors duration-200 flex items-center space-x-2"
-          >
-            <span className="material-icons">help_outline</span>
-            <span>Learn More</span>
-          </button>
         </motion.div>
       </div>
     </section>
