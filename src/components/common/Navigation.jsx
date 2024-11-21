@@ -9,30 +9,38 @@ const Navigation = () => {
   const [walletAddress, setWalletAddress] = useState('');
   const [showWalletMenu, setShowWalletMenu] = useState(false);
   const menuRef = useRef(null);
+  const lastScrollY = useRef(0);
+  const [isVisible, setIsVisible] = useState(true);
   const [isCorrectNetwork, setIsCorrectNetwork] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
-
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowWalletMenu(false);
+      const currentScrollY = window.scrollY;
+      
+      // Show/hide based on scroll direction
+      if (currentScrollY > lastScrollY.current) {
+        setIsVisible(false); // Scrolling down
+      } else {
+        setIsVisible(true); // Scrolling up
       }
+      
+      // Update scroll state for background
+      setScrolled(currentScrollY > 20);
+      
+      lastScrollY.current = currentScrollY;
     };
 
-    window.addEventListener('scroll', handleScroll);
-    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
+  useEffect(() => {
     checkNetwork();
     if (window.ethereum) {
       window.ethereum.on('chainChanged', checkNetwork);
     }
 
     return () => {
-      window.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('mousedown', handleClickOutside);
       if (window.ethereum) {
         window.ethereum.removeListener('chainChanged', checkNetwork);
       }
@@ -110,8 +118,10 @@ const Navigation = () => {
   };
 
   return (
-    <nav className={`fixed w-full top-0 z-50 transition-all duration-300 ${
-      scrolled ? 'bg-purple-900/95 shadow-lg backdrop-blur-sm' : 'bg-transparent'
+    <nav className={`fixed w-full z-50 transition-all duration-300 ${
+      scrolled ? 'bg-blue-900/95 shadow-lg backdrop-blur-sm' : 'bg-transparent'
+    } ${
+      isVisible ? 'top-0' : '-top-20'
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -123,24 +133,26 @@ const Navigation = () => {
             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center transform transition-transform group-hover:scale-110">
               <span className="text-xl">🤖</span>
             </div>
-            <span className="text-white font-bold text-xl tracking-tight">
-              Smart<span className="text-blue-400">AI</span>
-            </span>
+            <div className="flex flex-col">
+              <span className="text-blue-400 font-bold text-xl tracking-tight">
+                Smart<span className="text-blue-400">AI</span>
+              </span>
+            </div>
           </Link>
           
           {/* Navigation Links */}
-          <div className="flex space-x-1">
+          <div className="flex space-x-4">
             <NavLink to="/" current={location.pathname === "/"}>
               <span className="material-icons text-sm mr-1">home</span>
               Home
             </NavLink>
             <NavLink to="/ai" current={location.pathname === "/ai"}>
-              <span className="material-icons text-sm mr-1">smart_toy</span>
-              AI Generator
+              <span className="material-icons text-sm mr-1">school</span>
+              Learn & Create
             </NavLink>
           </div>
 
-          {/* Enhanced Wallet Connect Button with blue colors */}
+          {/* Wallet Connect Button */}
           <div className="flex items-center relative" ref={menuRef}>
             {isWalletConnected ? (
               <>
@@ -176,7 +188,7 @@ const Navigation = () => {
                   </span>
                 </button>
 
-                {/* Enhanced Dropdown Menu */}
+                {/* Wallet Menu Dropdown - remains the same */}
                 {showWalletMenu && (
                   <div className="absolute right-0 mt-2 top-full w-72 rounded-xl 
                                 bg-gradient-to-b from-blue-900/95 to-blue-800/95
@@ -243,14 +255,14 @@ const Navigation = () => {
   );
 };
 
-// Helper component for navigation links
+// Enhanced NavLink component
 const NavLink = ({ to, current, children }) => (
   <Link
     to={to}
     className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 flex items-center
       ${current 
-        ? 'bg-purple-600 text-white' 
-        : 'text-gray-300 hover:text-white hover:bg-purple-800/50'
+        ? 'bg-blue-600 text-white shadow-lg' 
+        : 'text-gray-300 hover:text-white hover:bg-blue-800/50'
       }`}
   >
     {children}
