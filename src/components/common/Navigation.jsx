@@ -165,6 +165,15 @@ const Navigation = () => {
               </motion.span>
               Learn & Create
             </NavLink>
+            <NavLink to="/audit" current={location.pathname === "/audit"}>
+              <motion.span 
+                className="material-icons text-sm mr-1"
+                whileHover={{ scale: 1.2, rotate: 5 }}
+              >
+                security
+              </motion.span>
+              Audit
+            </NavLink>
           </div>
 
           {/* Wallet Button */}

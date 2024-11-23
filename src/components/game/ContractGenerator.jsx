@@ -7,6 +7,7 @@ const ContractGenerator = () => {
   const [generatedContract, setGeneratedContract] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [contractName, setContractName] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
 
   const generateContract = async () => {
     setIsGenerating(true);
@@ -43,6 +44,17 @@ contract ${contractName || 'MyContract'} {
       console.error('Error generating contract:', error);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedContract);
+      setIsCopied(true);
+      // Reset the "Copied" state after 2 seconds
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text:', err);
     }
   };
 
@@ -207,12 +219,15 @@ contract ${contractName || 'MyContract'} {
                   <motion.button 
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex-1 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 
+                    onClick={copyToClipboard}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 
                              text-white px-6 py-3 rounded-xl transition-all duration-200 flex items-center 
-                             justify-center space-x-2 shadow-lg shadow-green-500/25"
+                             justify-center space-x-2 shadow-lg shadow-blue-500/25"
                   >
-                    <span className="material-icons">file_download</span>
-                    <span>Download Contract</span>
+                    <span className="material-icons">
+                      {isCopied ? 'check_circle' : 'content_copy'}
+                    </span>
+                    <span>{isCopied ? 'Copied!' : 'Copy Code'}</span>
                   </motion.button>
                   <motion.button 
                     whileHover={{ scale: 1.02 }}
