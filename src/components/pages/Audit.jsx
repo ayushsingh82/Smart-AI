@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Editor from "@monaco-editor/react";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Initialize Gemini AI
+const API_KEY = "AIzaSyDB3xwiAWd5IAhUn5Jg12Au3pxKuh11RqE";
+const genAI = new GoogleGenerativeAI(API_KEY);
 
 const VulnerabilityCard = ({ title, severity, description, recommendation }) => (
   <motion.div
@@ -34,36 +39,79 @@ const Audit = () => {
   const [contract, setContract] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState(null);
+  const [error, setError] = useState('');
 
   const analyzeContract = async () => {
+    if (!contract.trim()) {
+      setError('Please enter a smart contract to analyze');
+      return;
+    }
+
     setIsAnalyzing(true);
+    setError('');
+    
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock results - In production, this would come from your AI service
-      setResults([
+      // Create prompt for Gemini
+      const prompt = `Analyze the following Solidity smart contract for security vulnerabilities, best practices, and potential issues. 
+      Provide a detailed analysis including:
+      1. Security vulnerabilities
+      2. Gas optimization issues
+      3. Best practice violations
+      4. Potential logical flaws
+      5. Code quality issues
+
+      For each issue found, provide:
+      - Title
+      - Severity (High/Medium/Low)
+      - Description
+      - Recommendation for fixing
+
+      Format the response as a JSON array of objects with the following structure:
+      [
         {
-          title: "Reentrancy Vulnerability",
-          severity: "High",
-          description: "The contract may be vulnerable to reentrancy attacks due to state changes after external calls.",
-          recommendation: "Implement the checks-effects-interactions pattern and consider using ReentrancyGuard."
-        },
-        {
-          title: "Unchecked Return Value",
-          severity: "Medium",
-          description: "The contract doesn't check the return value of external calls, which could lead to silent failures.",
-          recommendation: "Always check return values from external calls and handle potential failures appropriately."
-        },
-        {
-          title: "Gas Optimization",
-          severity: "Low",
-          description: "Multiple state variables could be packed together to save gas.",
-          recommendation: "Consider reorganizing state variables to optimize for storage slots."
+          "title": "Issue title",
+          "severity": "High/Medium/Low",
+          "description": "Detailed description",
+          "recommendation": "How to fix"
         }
-      ]);
+      ]
+
+      Smart Contract:
+      ${contract}
+
+      Return only the JSON array without any additional explanation.`;
+
+      // Get Gemini model
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+      // Generate analysis
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // Parse the JSON response
+      let vulnerabilities = [];
+      try {
+        // Clean the response text to ensure it's valid JSON
+        const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
+        vulnerabilities = JSON.parse(cleanedText);
+      } catch (parseError) {
+        console.error('Error parsing AI response:', parseError);
+        throw new Error('Failed to parse analysis results');
+      }
+
+      // Validate and format the results
+      const formattedResults = vulnerabilities.map(v => ({
+        title: v.title || 'Unnamed Issue',
+        severity: ['High', 'Medium', 'Low'].includes(v.severity) ? v.severity : 'Medium',
+        description: v.description || 'No description provided',
+        recommendation: v.recommendation || 'No recommendation provided'
+      }));
+
+      setResults(formattedResults);
     } catch (error) {
-      console.error('Error analyzing contract:', error);
+      console.error('Analysis error:', error);
+      setError('Failed to analyze contract: ' + error.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -184,6 +232,15 @@ const Audit = () => {
             </motion.div>
           )}
         </motion.div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="max-w-4xl mx-auto mt-4">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400">
+              {error}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

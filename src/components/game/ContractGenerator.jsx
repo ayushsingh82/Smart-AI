@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Editor from "@monaco-editor/react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { setCompiledContract } from '../../utils/contractArtifacts';
 
 // Initialize Gemini AI with the API key
 const API_KEY = "AIzaSyDB3xwiAWd5IAhUn5Jg12Au3pxKuh11RqE";
@@ -14,6 +15,9 @@ const ContractGenerator = () => {
   const [contractName, setContractName] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [error, setError] = useState('');
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [compilationResult, setCompilationResult] = useState(null);
+  const [compilationDetails, setCompilationDetails] = useState(null);
 
   const generateContract = async () => {
     if (!prompt.trim()) {
@@ -81,6 +85,114 @@ const ContractGenerator = () => {
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy text:', err);
+    }
+  };
+
+  const compileContract = async () => {
+    setIsCompiling(true);
+    setError('');
+    setCompilationDetails(null);
+    
+    let worker = null;
+    
+    try {
+      // Create a web worker
+      worker = new Worker(new URL('../../utils/solc-worker.js', import.meta.url));
+      
+      // Create a promise to handle worker response
+      const compilePromise = new Promise((resolve, reject) => {
+        worker.onmessage = function(e) {
+          if (e.data.success) {
+            resolve({
+              output: e.data.output,
+              warnings: e.data.warnings
+            });
+          } else {
+            reject(new Error(e.data.error));
+          }
+        };
+        
+        worker.onerror = function(e) {
+          reject(new Error('Worker error: ' + e.message));
+        };
+
+        // Add timeout with progress updates
+        let timeoutCounter = 0;
+        const timeoutInterval = setInterval(() => {
+          timeoutCounter += 1;
+          if (timeoutCounter >= 120) { // 120 seconds total timeout
+            clearInterval(timeoutInterval);
+            if (worker) {
+              worker.terminate();
+              reject(new Error('Compilation timed out after 120 seconds'));
+            }
+          }
+        }, 1000);
+
+        // Cleanup interval on success
+        worker.onmessage = function(e) {
+          clearInterval(timeoutInterval);
+          if (e.data.success) {
+            resolve({
+              output: e.data.output,
+              warnings: e.data.warnings
+            });
+          } else {
+            reject(new Error(e.data.error));
+          }
+        };
+      });
+
+      // Send contract to worker
+      worker.postMessage({ source: generatedContract });
+
+      // Wait for compilation result
+      const { output, warnings } = await compilePromise;
+
+      // Get the contract name
+      const fileName = Object.keys(output.contracts['contract.sol'])[0];
+      const contract = output.contracts['contract.sol'][fileName];
+
+      if (!contract) {
+        throw new Error('No contract found in compilation output');
+      }
+
+      // Store compilation result
+      const compiledData = {
+        bytecode: contract.evm.bytecode.object,
+        abi: contract.abi,
+        contractName: fileName
+      };
+      
+      setCompiledContract(compiledData);
+
+      // Set success state with warnings if any
+      setCompilationResult({
+        success: true,
+        message: 'Contract compiled successfully!' + 
+                 (warnings.length ? ` (${warnings.length} warnings)` : ''),
+        warnings: warnings
+      });
+
+      // Set compilation details
+      setCompilationDetails({
+        gasEstimate: parseInt(contract.evm.gasEstimates?.creation?.totalCost || '0'),
+        methodCount: contract.abi.filter(item => item.type === 'function').length,
+        size: contract.evm.bytecode.object.length / 2,
+      });
+
+    } catch (err) {
+      console.error('Compilation error:', err);
+      setError('Compilation failed: ' + (err.message || 'Unknown error'));
+      setCompilationResult({
+        success: false,
+        message: 'Compilation failed: ' + (err.message || 'Unknown error')
+      });
+    } finally {
+      if (worker) {
+        worker.terminate();
+      }
+      setIsCompiling(false);
     }
   };
 
@@ -255,17 +367,82 @@ const ContractGenerator = () => {
                     </span>
                     <span>{isCopied ? 'Copied!' : 'Copy Code'}</span>
                   </motion.button>
+
+                  {/* New Compile Button */}
                   <motion.button 
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 
-                             text-white px-6 py-3 rounded-xl transition-all duration-200 flex items-center 
-                             justify-center space-x-2 shadow-lg shadow-blue-500/25"
+                    onClick={compileContract}
+                    disabled={isCompiling || !generatedContract}
+                    className={`flex-1 bg-gradient-to-r from-green-600 to-emerald-600 
+                             hover:from-green-500 hover:to-emerald-500 
+                             text-white px-6 py-3 rounded-xl transition-all duration-200 
+                             flex items-center justify-center space-x-2 shadow-lg shadow-green-500/25
+                             ${(!generatedContract || isCompiling) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <span className="material-icons">
+                      {isCompiling ? 'pending' : compilationResult?.success ? 'check_circle' : 'code'}
+                    </span>
+                    <span>
+                      {isCompiling ? 'Compiling...' : 
+                       compilationResult?.success ? 'Compiled' : 'Compile'}
+                    </span>
+                  </motion.button>
+
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={!compilationResult?.success}
+                    className={`flex-1 bg-gradient-to-r from-blue-600 to-purple-600 
+                             hover:from-blue-500 hover:to-purple-500 
+                             text-white px-6 py-3 rounded-xl transition-all duration-200 
+                             flex items-center justify-center space-x-2 shadow-lg shadow-blue-500/25
+                             ${!compilationResult?.success ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <span className="material-icons">rocket_launch</span>
                     <span>Deploy Contract</span>
                   </motion.button>
                 </div>
+
+                {/* Show compilation result message if exists */}
+                {compilationResult && (
+                  <div className="mt-4 space-y-4">
+                    <div className={`p-4 rounded-xl border ${
+                      compilationResult.success 
+                        ? 'bg-green-500/10 border-green-500/20 text-green-400' 
+                        : 'bg-red-500/10 border-red-500/20 text-red-400'
+                    }`}>
+                      {compilationResult.message}
+                    </div>
+
+                    {/* Show compilation details if successful */}
+                    {compilationResult.success && compilationDetails && (
+                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                        <h3 className="text-blue-400 font-medium mb-2">Compilation Details</h3>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-gray-400 text-sm">Estimated Gas</p>
+                            <p className="text-white font-mono">
+                              {compilationDetails.gasEstimate.toLocaleString()} wei
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-400 text-sm">Contract Size</p>
+                            <p className="text-white font-mono">
+                              {compilationDetails.size.toLocaleString()} bytes
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-400 text-sm">Methods</p>
+                            <p className="text-white font-mono">
+                              {compilationDetails.methodCount} functions
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
