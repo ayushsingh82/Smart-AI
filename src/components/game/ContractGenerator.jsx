@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Editor from "@monaco-editor/react";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Initialize Gemini AI with the API key
+const API_KEY = "AIzaSyDB3xwiAWd5IAhUn5Jg12Au3pxKuh11RqE";
+const genAI = new GoogleGenerativeAI(API_KEY);
 
 const ContractGenerator = () => {
   const [prompt, setPrompt] = useState('');
@@ -8,40 +13,61 @@ const ContractGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [contractName, setContractName] = useState('');
   const [isCopied, setIsCopied] = useState(false);
+  const [error, setError] = useState('');
 
   const generateContract = async () => {
-    setIsGenerating(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const mockContract = `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+    if (!prompt.trim()) {
+      setError('Please enter a description for your smart contract.');
+      return;
+    }
 
-contract ${contractName || 'MyContract'} {
-    // State variables
-    address public owner;
+    setIsGenerating(true);
+    setError('');
     
-    // Events
-    event ContractDeployed(address indexed _owner);
-    
-    // Constructor
-    constructor() {
-        owner = msg.sender;
-        emit ContractDeployed(msg.sender);
-    }
-    
-    // Your custom logic will be generated here based on the prompt
-    
-    // Modifier for owner-only functions
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Not authorized");
-        _;
-    }
-}`;
+    try {
+      // Create prompt for Gemini
+      const fullPrompt = `Create a secure Solidity smart contract with the following requirements:
+      Contract Name: ${contractName || 'MyContract'}
       
-      setGeneratedContract(mockContract);
+      Requirements:
+      ${prompt}
+      
+      Please ensure the contract:
+      1. Follows best security practices
+      2. Is well-documented with comments
+      3. Uses latest Solidity version (0.8.x)
+      4. Includes proper error handling
+      5. Has events for important state changes
+      6. Implements access control where needed
+      
+      Return only the Solidity code without any additional explanation.`;
+
+      // Get Gemini model
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+      // Generate content
+      const result = await model.generateContent(fullPrompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // Extract code between any markdown code blocks if present
+      let contractCode = text;
+      const codeBlockMatch = text.match(/```solidity\n([\s\S]*?)\n```/);
+      if (codeBlockMatch) {
+        contractCode = codeBlockMatch[1];
+      }
+
+      // Add SPDX license identifier if not present
+      if (!contractCode.includes('SPDX-License-Identifier')) {
+        contractCode = '// SPDX-License-Identifier: MIT\n' + contractCode;
+      }
+
+      setGeneratedContract(contractCode);
     } catch (error) {
       console.error('Error generating contract:', error);
+      setError(
+        'Failed to generate contract. Please try again. Error: ' + error.message
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -245,6 +271,14 @@ contract ${contractName || 'MyContract'} {
           )}
         </motion.div>
       </div>
+
+      {error && (
+        <div className="max-w-4xl mx-auto mt-4">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400">
+            {error}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
