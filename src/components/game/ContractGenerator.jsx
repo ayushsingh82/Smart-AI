@@ -4,9 +4,24 @@ import Editor from "@monaco-editor/react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { setCompiledContract } from '../../utils/contractArtifacts';
 
-// Initialize Gemini AI with the API key
-const API_KEY = "AIzaSyDB3xwiAWd5IAhUn5Jg12Au3pxKuh11RqE";
-const genAI = new GoogleGenerativeAI(API_KEY);
+// Initialize Gemini AI with rate limiting
+const initializeAI = () => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY_CONTRACT;
+  if (!apiKey) {
+    throw new Error('Contract generation API key not found');
+  }
+  try {
+    return new GoogleGenerativeAI(apiKey.trim());
+  } catch (error) {
+    console.error('Error initializing AI:', error);
+    throw new Error('Failed to initialize AI service');
+  }
+};
+
+// Rate limiter configuration
+const RATE_LIMIT_DELAY = 5000; // 5 seconds between requests
+const MAX_RETRIES = 3; // Number of retries
+let lastRequestTime = 0;
 
 const ContractGenerator = () => {
   const [prompt, setPrompt] = useState('');
@@ -18,6 +33,31 @@ const ContractGenerator = () => {
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationResult, setCompilationResult] = useState(null);
   const [compilationDetails, setCompilationDetails] = useState(null);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  const waitForRateLimit = async () => {
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    
+    if (timeSinceLastRequest < RATE_LIMIT_DELAY) {
+      const waitTime = RATE_LIMIT_DELAY - timeSinceLastRequest;
+      setIsRateLimited(true);
+      
+      // Show countdown
+      let timeLeft = Math.ceil(waitTime / 1000);
+      while (timeLeft > 0) {
+        setCountdown(timeLeft);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        timeLeft--;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, waitTime % 1000));
+      setIsRateLimited(false);
+    }
+    
+    lastRequestTime = Date.now();
+  };
 
   const generateContract = async () => {
     if (!prompt.trim()) {
@@ -29,6 +69,10 @@ const ContractGenerator = () => {
     setError('');
     
     try {
+      // Initialize AI and wait for rate limit
+      const genAI = initializeAI();
+      await waitForRateLimit();
+
       // Create prompt for Gemini
       const fullPrompt = `Create a secure Solidity smart contract with the following requirements:
       Contract Name: ${contractName || 'MyContract'}
@@ -50,28 +94,48 @@ const ContractGenerator = () => {
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
       // Generate content
-      const result = await model.generateContent(fullPrompt);
-      const response = await result.response;
-      const text = response.text();
+      let attempts = 0;
+      while (attempts < MAX_RETRIES) {
+        try {
+          const result = await model.generateContent(fullPrompt);
+          const response = await result.response;
+          const text = response.text();
 
-      // Extract code between any markdown code blocks if present
-      let contractCode = text;
-      const codeBlockMatch = text.match(/```solidity\n([\s\S]*?)\n```/);
-      if (codeBlockMatch) {
-        contractCode = codeBlockMatch[1];
+          // Extract code between any markdown code blocks if present
+          let contractCode = text;
+          const codeBlockMatch = text.match(/```solidity\n([\s\S]*?)\n```/);
+          if (codeBlockMatch) {
+            contractCode = codeBlockMatch[1];
+          }
+
+          // Add SPDX license identifier if not present
+          if (!contractCode.includes('SPDX-License-Identifier')) {
+            contractCode = '// SPDX-License-Identifier: MIT\n' + contractCode;
+          }
+
+          setGeneratedContract(contractCode);
+          break;
+        } catch (error) {
+          attempts++;
+          if (error.message.includes('RATE_LIMIT_EXCEEDED')) {
+            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY * attempts));
+            continue;
+          }
+          throw error;
+        }
       }
 
-      // Add SPDX license identifier if not present
-      if (!contractCode.includes('SPDX-License-Identifier')) {
-        contractCode = '// SPDX-License-Identifier: MIT\n' + contractCode;
+      if (attempts === MAX_RETRIES) {
+        throw new Error('Service is currently busy. Please try again later.');
       }
 
-      setGeneratedContract(contractCode);
     } catch (error) {
       console.error('Error generating contract:', error);
-      setError(
-        'Failed to generate contract. Please try again. Error: ' + error.message
-      );
+      if (error.message.includes('RATE_LIMIT_EXCEEDED')) {
+        setError('Rate limit exceeded. Please wait a moment and try again.');
+      } else {
+        setError('Failed to generate contract: ' + error.message);
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -301,9 +365,9 @@ const ContractGenerator = () => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={generateContract}
-                disabled={isGenerating || !prompt.trim()}
+                disabled={isGenerating || !prompt.trim() || isRateLimited}
                 className={`w-full py-3 rounded-xl font-medium flex items-center justify-center space-x-2
-                         ${isGenerating || !prompt.trim() 
+                         ${(isGenerating || !prompt.trim() || isRateLimited) 
                            ? 'bg-blue-600/50 cursor-not-allowed' 
                            : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500'} 
                          text-white transition-all duration-200 shadow-lg shadow-blue-500/25`}
@@ -312,6 +376,11 @@ const ContractGenerator = () => {
                   <>
                     <span className="material-icons animate-spin">refresh</span>
                     <span>Generating Contract...</span>
+                  </>
+                ) : isRateLimited ? (
+                  <>
+                    <span className="material-icons">timer</span>
+                    <span>Please wait {countdown}s...</span>
                   </>
                 ) : (
                   <>

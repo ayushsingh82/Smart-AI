@@ -3,9 +3,25 @@ import { motion } from 'framer-motion';
 import Editor from "@monaco-editor/react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Initialize Gemini AI
-const API_KEY = "AIzaSyDB3xwiAWd5IAhUn5Jg12Au3pxKuh11RqE";
-const genAI = new GoogleGenerativeAI(API_KEY);
+// Initialize Gemini AI with rate limiting
+const initializeAI = () => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY_AUDIT;
+  if (!apiKey) {
+    throw new Error('Audit API key not found');
+  }
+  try {
+    return new GoogleGenerativeAI(apiKey.trim());
+  } catch (error) {
+    console.error('Error initializing AI:', error);
+    throw new Error('Failed to initialize AI service');
+  }
+};
+
+// Rate limiter configuration
+const RATE_LIMIT_DELAY = 5000; // 5 seconds between requests
+const MAX_RETRIES = 5; // Increase max retries
+const INITIAL_RETRY_DELAY = 3000; // 3 seconds initial retry delay
+let lastRequestTime = 0;
 
 const VulnerabilityCard = ({ title, severity, description, recommendation }) => (
   <motion.div
@@ -40,6 +56,31 @@ const Audit = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  const waitForRateLimit = async () => {
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    
+    if (timeSinceLastRequest < RATE_LIMIT_DELAY) {
+      const waitTime = RATE_LIMIT_DELAY - timeSinceLastRequest;
+      setIsRateLimited(true);
+      
+      // Show countdown
+      let timeLeft = Math.ceil(waitTime / 1000);
+      while (timeLeft > 0) {
+        setCountdown(timeLeft);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        timeLeft--;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, waitTime % 1000));
+      setIsRateLimited(false);
+    }
+    
+    lastRequestTime = Date.now();
+  };
 
   const analyzeContract = async () => {
     if (!contract.trim()) {
@@ -51,6 +92,12 @@ const Audit = () => {
     setError('');
     
     try {
+      // Initialize AI with error handling
+      const genAI = initializeAI();
+      
+      // Wait for rate limit
+      await waitForRateLimit();
+
       // Create prompt for Gemini
       const prompt = `Analyze the following Solidity smart contract for security vulnerabilities, best practices, and potential issues. 
       Provide a detailed analysis including:
@@ -84,34 +131,63 @@ const Audit = () => {
       // Get Gemini model
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-      // Generate analysis
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      // Generate analysis with exponential backoff retry logic
+      let attempts = 0;
+      
+      while (attempts < MAX_RETRIES) {
+        try {
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const text = response.text();
 
-      // Parse the JSON response
-      let vulnerabilities = [];
-      try {
-        // Clean the response text to ensure it's valid JSON
-        const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
-        vulnerabilities = JSON.parse(cleanedText);
-      } catch (parseError) {
-        console.error('Error parsing AI response:', parseError);
-        throw new Error('Failed to parse analysis results');
+          // Parse the JSON response
+          let vulnerabilities = [];
+          try {
+            const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
+            vulnerabilities = JSON.parse(cleanedText);
+          } catch (parseError) {
+            console.error('Error parsing AI response:', parseError);
+            throw new Error('Failed to parse analysis results');
+          }
+
+          // Validate and format the results
+          const formattedResults = vulnerabilities.map(v => ({
+            title: v.title || 'Unnamed Issue',
+            severity: ['High', 'Medium', 'Low'].includes(v.severity) ? v.severity : 'Medium',
+            description: v.description || 'No description provided',
+            recommendation: v.recommendation || 'No recommendation provided'
+          }));
+
+          setResults(formattedResults);
+          break; // Success, exit loop
+        } catch (error) {
+          attempts++;
+          if (error.message.includes('RATE_LIMIT_EXCEEDED')) {
+            // Exponential backoff
+            const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempts - 1);
+            console.log(`Retry attempt ${attempts}/${MAX_RETRIES}, waiting ${delay/1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          throw error; // Re-throw non-rate-limit errors
+        }
       }
 
-      // Validate and format the results
-      const formattedResults = vulnerabilities.map(v => ({
-        title: v.title || 'Unnamed Issue',
-        severity: ['High', 'Medium', 'Low'].includes(v.severity) ? v.severity : 'Medium',
-        description: v.description || 'No description provided',
-        recommendation: v.recommendation || 'No recommendation provided'
-      }));
+      if (attempts === MAX_RETRIES) {
+        throw new Error(`Service is currently busy. Please try again in ${Math.ceil(RATE_LIMIT_DELAY/1000)} seconds.`);
+      }
 
-      setResults(formattedResults);
     } catch (error) {
       console.error('Analysis error:', error);
-      setError('Failed to analyze contract: ' + error.message);
+      if (error.message.includes('API key not found')) {
+        setError('Configuration error: ' + error.message);
+      } else if (error.message.includes('API_KEY_INVALID')) {
+        setError('Invalid API key. Please check your configuration.');
+      } else if (error.message.includes('RATE_LIMIT_EXCEEDED')) {
+        setError(`Rate limit exceeded. Please wait ${Math.ceil(RATE_LIMIT_DELAY/1000)} seconds before trying again.`);
+      } else {
+        setError('Failed to analyze contract: ' + error.message);
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -196,9 +272,9 @@ const Audit = () => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={analyzeContract}
-                disabled={isAnalyzing || !contract.trim()}
+                disabled={isAnalyzing || !contract.trim() || isRateLimited}
                 className={`w-full py-3 rounded-xl font-medium flex items-center justify-center space-x-2
-                         ${isAnalyzing || !contract.trim() 
+                         ${(isAnalyzing || !contract.trim() || isRateLimited)
                            ? 'bg-blue-600/50 cursor-not-allowed' 
                            : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500'} 
                          text-white transition-all duration-200 shadow-lg shadow-blue-500/25`}
@@ -207,6 +283,11 @@ const Audit = () => {
                   <>
                     <span className="material-icons animate-spin">refresh</span>
                     <span>Analyzing Contract...</span>
+                  </>
+                ) : isRateLimited ? (
+                  <>
+                    <span className="material-icons">timer</span>
+                    <span>Please wait {countdown}s...</span>
                   </>
                 ) : (
                   <>

@@ -36,3 +36,8 @@ pnpm-debug.log*
 
 # Vite
 .vite/ 
+
+# Environment variables
+.env
+.env.local
+.env.*.local 
